@@ -9,13 +9,11 @@ java {
     toolchain { languageVersion.set(JavaLanguageVersion.of(25)) }
 }
 
-val algebraProp = providers.gradleProperty("algebra")
+val libFileProvider: Provider<File> = providers.gradleProperty("lib").map { project.file(it) }
 
-data class AlgebraResolved(
-    val name: String,
-    val libFile: File?,
-    val headerFile: File?
-)
+val headerFileProvider: Provider<File> = providers.gradleProperty("mvec_h").map { project.file(it) }
+
+val jextractPathProvider: Provider<File> = providers.gradleProperty("jextract").map { project.file(it) }
 
 fun runCommand(cmd: List<String>, cwd: File) {
     val pb = ProcessBuilder(cmd)
@@ -25,44 +23,6 @@ fun runCommand(cmd: List<String>, cwd: File) {
     val code = p.waitFor()
     if (code != 0) throw GradleException("Command failed (${cmd.joinToString(" ")}), exit=$code")
 }
-
-fun resolveAlgebra(projectDir: File, algebraInput: String): AlgebraResolved {
-    val root = project.file(algebraInput).absoluteFile
-    require(root.exists() && root.isDirectory) { "Algebra dir not found: $root" }
-
-    val base = root.name
-    val name = if (base.startsWith("garamon_") && base.length > "garamon_".length) {
-        base.removePrefix("garamon_")
-    } else {
-        error("Cannot infer algebra name from $root")
-    }
-
-    val libCandidates = listOf(
-        File(root, "lib$name.so"),
-        File(root, "lib$name.dylib"),
-        File(root, "$name.dll")
-    ) + (root.listFiles()?.filter { it.isFile && it.name.matches(Regex("""lib.*\.(so|dylib|dll)$""")) } ?: emptyList())
-    val libFile = libCandidates.firstOrNull { it.isFile }
-
-    val header = File(root, "src/$name/Mvec.h")
-    val headerFile = header.takeIf { it.isFile }
-
-    return AlgebraResolved(name, libFile, headerFile)
-}
-
-val libPath: Provider<String> = providers.gradleProperty("lib").orElse(
-    algebraProp.map { a ->
-        val r = resolveAlgebra(project.projectDir, a)
-        r.libFile?.absolutePath ?: error("Cannot locate native library under $a")
-    }
-)
-
-val header: Provider<String> = providers.gradleProperty("header").orElse(
-    algebraProp.map { a ->
-        val r = resolveAlgebra(project.projectDir, a)
-        r.headerFile?.absolutePath ?: error("Cannot locate header under $a (expected src/${r.name}/Mvec.h)")
-    }
-)
 
 // Build dirs
 val algebraDir      = layout.buildDirectory.dir("algebra")
@@ -78,7 +38,7 @@ val templatesTests = templates.asFileTree.matching { include("tests/*.java") }
 
 // Copy external garamon lib to build/lib and expose libLogicalName
 val copyNativeLib = tasks.register<Copy>("copyNativeLib") {
-    val lib = libPath.orNull ?: error("Missing -Palgebra=...")
+    val lib = libFileProvider.orNull ?: error("Missing -Plib=...")
 
     val nativeClassifier: String = when {
         org.gradle.internal.os.OperatingSystem.current().isWindows -> "win-x64"
@@ -92,11 +52,11 @@ val copyNativeLib = tasks.register<Copy>("copyNativeLib") {
     into(targetNativeDir)
     outputs.dir(targetNativeDir)
 
-    val base = Paths.get(lib).fileName.toString()
+    val base = lib.name
     val noPrefix = if (base.startsWith("lib")) base.removePrefix("lib") else base
     val logicalName = noPrefix.substringBefore('.')
     extensions.extraProperties["libLogicalName"] = logicalName
-    extensions.extraProperties["libPathValue"] = lib
+    extensions.extraProperties["libPathValue"] = lib.absolutePath
 
     doLast {
         val propertiesFile = resourcesDir.get().asFile.resolve("native-lib.properties")
@@ -170,15 +130,17 @@ val prepareAlgebra = tasks.register("prepareAlgebra") {
 // jextract outputs directly into algebra/src/main/java
 val runJextract = tasks.register<Exec>("runJextract") {
     dependsOn(prepareAlgebra)
-    val hdr = header.orNull ?: error("Missing -Palgebra=...")
+    val jextractExe = jextractPathProvider.orNull ?: error("Missing -Pjextract=... (path to jextract.bat)")
+    require(jextractExe.isFile) { "jextract executable not found: $jextractExe" }
+    val hdr = headerFileProvider.orNull ?: error("Missing -Pmevc_h=...")
     val libName = copyNativeLib.get().extensions.extraProperties["libLogicalName"] as String
 
     commandLine(
-        "jextract",
+        jextractExe.absolutePath,
         "-t", "org.garamon.$libName",
-        "-l", ":${project.file(libPath.get()).absolutePath}",
+        "-l", ":${libFileProvider.get().absolutePath}",
         "--output", algebraSrcMain.get().asFile.absolutePath,
-        hdr
+        hdr.absolutePath
     )
     outputs.dir(algebraSrcMain.map { it.dir("org/garamon/$libName") })
 }
@@ -279,7 +241,7 @@ val runMiniParserTests = tasks.register<JavaExec>("runMiniParserTests") {
 }
 
 // Build the algebra with its own wrapper
-tasks.register("makeAlgebra") {
+val makeAlgebra = tasks.register("makeAlgebra") {
     group = "algebra"
     description = "Generate the algebra under build/algebra and build it with its wrapper"
 
@@ -294,16 +256,7 @@ tasks.register("makeAlgebra") {
 }
 
 // Keep root artifacts if needed (sources/javadoc for the tiny parser)
-val sourcesJar = tasks.register<Jar>("sourcesJar") {
-    archiveClassifier.set("sources")
-    from(java.sourceSets.main.get().allSource)
-}
-val javadocJar = tasks.register<Jar>("javadocJar") {
-    archiveClassifier.set("javadoc")
-    from(tasks.javadoc)
-}
 tasks.named("assemble") {
-    dependsOn(tasks.jar)
-    dependsOn(sourcesJar)
-    dependsOn(javadocJar)
+    dependsOn(makeAlgebra)
 }
+

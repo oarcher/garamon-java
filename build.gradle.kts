@@ -43,9 +43,13 @@ class PrefixedOutputStream(
  
  // Load optional algebra properties
 val loadedProps = Properties()
-val localPropsFile = rootProject.file("gradle-algebra.properties")
-if (localPropsFile.exists()) {
-    localPropsFile.inputStream().use { loadedProps.load(it) }
+val confFileProvider: Provider<File> = getPropertyProvider("conf").map { layout.projectDirectory.file(it).asFile }
+
+if (confFileProvider.isPresent) {
+    val confFile = confFileProvider.get()
+    if (confFile.exists()) {
+        confFile.inputStream().use { loadedProps.load(it) }
+    }
 }
  
  fun getPropertyProvider(name: String): Provider<String> {
@@ -55,6 +59,45 @@ if (localPropsFile.exists()) {
             ?.trim('"')
             ?.replace("\\", "/")
             ?: providers.gradleProperty(name).orNull
+    }
+ }
+ tasks.register("checkConf") {
+    doLast {
+        val missingProps = mutableListOf<String>()
+
+        if (!confFileProvider.isPresent) {
+            missingProps.add("conf")
+        } else {
+            val confFile = confFileProvider.get()
+            if (!confFile.exists()) {
+                throw GradleException("Configuration file not found: '${confFile.absolutePath}'. Please ensure the file exists and is accessible.")
+            }
+            if (loadedProps.isEmpty) {
+                throw GradleException("Configuration file '${confFile.absolutePath}' is empty or could not be loaded. Please ensure it contains 'lib', 'mvec_h', and 'jextract' properties.")
+            }
+            if (!libFileProvider.isPresent) {
+                missingProps.add("lib")
+            }
+            if (!headerFileProvider.isPresent) {
+                missingProps.add("mvec_h")
+            }
+            if (!jextractPathProvider.isPresent) {
+                missingProps.add("jextract")
+            }
+        }
+
+        if (missingProps.isNotEmpty()) {
+            val message = """
+                Missing required configuration properties: ${missingProps.joinToString(", ")}.
+                
+                Please ensure the 'conf' property is defined via -Pconf=path/to/algebra.conf and your algebra.conf contains:
+                
+                lib=path/to/your/library.so
+                mvec_h=path/to/your/Mvec_h.h
+                jextract=path/to/your/jextract_executable
+            """.trimIndent()
+            throw GradleException(message)
+        }
     }
  }
  
@@ -91,6 +134,7 @@ if (localPropsFile.exists()) {
  val templatesTests  = templates.asFileTree.matching { include("tests/*.java") }
  
  val copyNativeLib = tasks.register<Copy>("copyNativeLib") {
+    dependsOn("checkConf")
     val nativeClassifier = when {
         org.gradle.internal.os.OperatingSystem.current().isWindows -> "win-x64"
         org.gradle.internal.os.OperatingSystem.current().isMacOsX -> "macos-aarch64"
@@ -101,14 +145,25 @@ if (localPropsFile.exists()) {
     onlyIf { libFileProvider.isPresent }
     into(targetNativeDir)
     outputs.dir(targetNativeDir)
- 
+    inputs.file(libFileProvider)
+    from(libFileProvider)
     doFirst {
-        val lib = libFileProvider.get()
-        from(lib)
+        // The 'from' declaration is now outside doFirst for proper up-to-date checks.
+        // This block can be removed if no other doFirst logic is needed.
     }
 
+ }
+ 
+ val generateNativeLibProperties = tasks.register("generateNativeLibProperties") {
+    dependsOn("checkConf")
+    onlyIf { libFileProvider.isPresent }
+    outputs.file(resourcesDir.map { it.file("native-lib.properties") })
     doLast {
-        val lib = libFileProvider.get()
+        val nativeClassifier = when {
+            org.gradle.internal.os.OperatingSystem.current().isWindows -> "win-x64"
+            org.gradle.internal.os.OperatingSystem.current().isMacOsX -> "macos-aarch64"
+            else -> "linux-x86_64"
+        }
         val propertiesFile = resourcesDir.get().asFile.resolve("native-lib.properties")
         propertiesFile.writeText(
             """
@@ -120,7 +175,7 @@ if (localPropsFile.exists()) {
  }
  
  val prepareAlgebra = tasks.register("prepareAlgebra") {
-    dependsOn(copyNativeLib)
+    dependsOn(copyNativeLib, generateNativeLibProperties)
     doLast {
         val libFile = libFileProvider.get()
         val dir = algebraDir.get().asFile
@@ -174,7 +229,7 @@ if (localPropsFile.exists()) {
  }
  
  val runJextract = tasks.register<Exec>("runJextract") {
-    dependsOn(prepareAlgebra)
+    dependsOn("checkConf", prepareAlgebra)
     doFirst {
         val jextractExe = jextractPathProvider.get()
         require(jextractExe.isFile) { "jextract executable not found: $jextractExe" }
@@ -274,7 +329,13 @@ if (localPropsFile.exists()) {
     dependsOn(runMiniParserMain, runMiniParserTests)
     doLast {
         val dir = algebraDir.get().asFile
-        println("Algebra emitted at: ${dir.absolutePath}")
+        println("""
+            Algebra generated, but not yet built.
+            To build it:
+
+                cd ${dir}
+                ./gradlew build
+        """.trimIndent())
     }
  }
  

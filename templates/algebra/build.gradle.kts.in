@@ -2,18 +2,21 @@ import org.gradle.external.javadoc.StandardJavadocDocletOptions
 
 plugins {
     `java-library`
+    `maven-publish`
 }
 
-val current = JavaVersion.current()
-if (!current.isCompatibleWith(JavaVersion.VERSION_22)) {
-    throw GradleException("JDK 22+ required. Detected: $current")
-}
+group = "org.garamon.${NAME}"
+version = "0.9"
+
 
 repositories {
     mavenCentral()
 }
 
 java {
+    toolchain { languageVersion.set(JavaLanguageVersion.of(25)) }
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
     withSourcesJar()
     withJavadocJar()
 }
@@ -35,10 +38,9 @@ tasks.withType<Jar>().configureEach {
 }
 
 tasks.jar {
-    archiveBaseName.set("garamon-java-${NAME}")
     manifest {
         attributes(
-            "Implementation-Title" to "garamon-java-${NAME}",
+            "Implementation-Title" to "garamon-${NAME}",
             "Implementation-Version" to (project.findProperty("version") ?: "0.1.0"),
             "Automatic-Module-Name" to "org.garamon.${NAME}"
         )

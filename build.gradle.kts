@@ -2,78 +2,129 @@ import org.apache.tools.ant.filters.ReplaceTokens
 import java.nio.file.Paths
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.io.OutputStream
+import java.io.ByteArrayOutputStream
+import java.util.Properties
 
-plugins { java }
+class PrefixedOutputStream(
+    private val prefix: String,
+    private val delegate: OutputStream
+) : OutputStream() {
+    private val lineBuffer = ByteArrayOutputStream()
 
-java {
-    toolchain { languageVersion.set(JavaLanguageVersion.of(25)) }
+    override fun write(b: Int) {
+        if (b == '\n'.code) {
+            delegate.write(prefix.toByteArray())
+            delegate.write(lineBuffer.toByteArray())
+            delegate.write('\n'.code)
+            lineBuffer.reset()
+        } else {
+            lineBuffer.write(b)
+        }
+    }
+
+    override fun flush() {
+        delegate.flush()
+    }
+
+    override fun close() {
+        flush()
+        delegate.close()
+    }
 }
 
-val libFileProvider: Provider<File> = providers.gradleProperty("lib").map { project.file(it) }
-
-val headerFileProvider: Provider<File> = providers.gradleProperty("mvec_h").map { project.file(it) }
-
-val jextractPathProvider: Provider<File> = providers.gradleProperty("jextract").map { project.file(it) }
-
-fun runCommand(cmd: List<String>, cwd: File) {
+ fun calculateLogicalName(libFile: File): String {
+    val base = libFile.name
+    val noPrefix = if (base.startsWith("lib")) base.removePrefix("lib") else base
+    return noPrefix.substringBefore('.')
+ }
+ 
+ plugins { java }
+ 
+ // Load optional algebra properties
+val loadedProps = Properties()
+val localPropsFile = rootProject.file("gradle-algebra.properties")
+if (localPropsFile.exists()) {
+    localPropsFile.inputStream().use { loadedProps.load(it) }
+}
+ 
+ fun getPropertyProvider(name: String): Provider<String> {
+    return providers.provider {
+        loadedProps.getProperty(name)
+            ?.trim()
+            ?.trim('"')
+            ?.replace("\\", "/")
+            ?: providers.gradleProperty(name).orNull
+    }
+ }
+ 
+ java {
+    toolchain { languageVersion.set(JavaLanguageVersion.of(25)) }
+ }
+ 
+ tasks.jar { enabled = false }
+ 
+ val libFileProvider: Provider<File> = getPropertyProvider("lib").map { layout.projectDirectory.file(it).asFile }
+ val libLogicalNameProvider: Provider<String> = libFileProvider.map { calculateLogicalName(it) }
+ 
+ val headerFileProvider: Provider<File> = getPropertyProvider("mvec_h").map { layout.projectDirectory.file(it).asFile }
+ val jextractPathProvider: Provider<File> = getPropertyProvider("jextract").map { layout.projectDirectory.file(it).asFile }
+ 
+ fun runCommand(cmd: List<String>, cwd: File) {
     val pb = ProcessBuilder(cmd)
     pb.directory(cwd)
     pb.inheritIO()
     val p = pb.start()
     val code = p.waitFor()
     if (code != 0) throw GradleException("Command failed (${cmd.joinToString(" ")}), exit=$code")
-}
-
-// Build dirs
-val algebraDir      = layout.buildDirectory.dir("algebra")
-val algebraSrcMain  = algebraDir.map { it.dir("src/main/java") }
-val algebraSrcTest  = algebraDir.map { it.dir("src/test/java") }
-val classesDir      = algebraDir.map { it.dir("tmp/classes") }
-val resourcesDir    = algebraDir.map { it.dir("src/main/resources" ) }
-val nativeDir       = resourcesDir.map { it.dir("natives") }
-val templates    = layout.projectDirectory.dir("templates")
-val templatesGen = templates.dir("generator")
-val templatesMain  = templates.asFileTree.matching { include("*.java") }
-val templatesTests = templates.asFileTree.matching { include("tests/*.java") }
-
-// Copy external garamon lib to build/lib and expose libLogicalName
-val copyNativeLib = tasks.register<Copy>("copyNativeLib") {
-    val lib = libFileProvider.orNull ?: error("Missing -Plib=...")
-
-    val nativeClassifier: String = when {
+ }
+ 
+ val algebraDir      = layout.buildDirectory.dir("algebra")
+ val algebraSrcMain  = algebraDir.map { it.dir("src/main/java") }
+ val algebraSrcTest  = algebraDir.map { it.dir("src/test/java") }
+ val classesDir      = algebraDir.map { it.dir("tmp/classes") }
+ val resourcesDir    = algebraDir.map { it.dir("src/main/resources" ) }
+ val nativeDir       = resourcesDir.map { it.dir("natives") }
+ val templates       = layout.projectDirectory.dir("templates")
+ val templatesGen    = templates.dir("generator")
+ val templatesMain   = templates.asFileTree.matching { include("*.java") }
+ val templatesTests  = templates.asFileTree.matching { include("tests/*.java") }
+ 
+ val copyNativeLib = tasks.register<Copy>("copyNativeLib") {
+    val nativeClassifier = when {
         org.gradle.internal.os.OperatingSystem.current().isWindows -> "win-x64"
         org.gradle.internal.os.OperatingSystem.current().isMacOsX -> "macos-aarch64"
         else -> "linux-x86_64"
     }
-
     val targetNativeDir = nativeDir.map { it.dir(nativeClassifier) }
-
-    from(lib)
+ 
+    onlyIf { libFileProvider.isPresent }
     into(targetNativeDir)
     outputs.dir(targetNativeDir)
-
-    val base = lib.name
-    val noPrefix = if (base.startsWith("lib")) base.removePrefix("lib") else base
-    val logicalName = noPrefix.substringBefore('.')
-    extensions.extraProperties["libLogicalName"] = logicalName
-    extensions.extraProperties["libPathValue"] = lib.absolutePath
+ 
+    doFirst {
+        val lib = libFileProvider.get()
+        from(lib)
+    }
 
     doLast {
+        val lib = libFileProvider.get()
         val propertiesFile = resourcesDir.get().asFile.resolve("native-lib.properties")
-        propertiesFile.writeText("""
-            native.baseName=${logicalName}
-            native.classifier.default=${nativeClassifier}
-
-        """.trimIndent())
+        propertiesFile.writeText(
+            """
+            native.baseName=${libLogicalNameProvider.get()}
+            native.classifier.default=$nativeClassifier
+            """.trimIndent()
+        )
     }
-}
-
-// Prepare algebra skeleton (dirs + templates + native lib + wrapper)
-val prepareAlgebra = tasks.register("prepareAlgebra") {
+ }
+ 
+ val prepareAlgebra = tasks.register("prepareAlgebra") {
     dependsOn(copyNativeLib)
     doLast {
-        val libLogicalName = copyNativeLib.get().extensions.extraProperties["libLogicalName"] as String
+        val libFile = libFileProvider.get()
         val dir = algebraDir.get().asFile
+        val libLogicalName = libLogicalNameProvider.get()
         val pkg = "org.garamon.$libLogicalName"
 
         val srcMain = algebraSrcMain.get().asFile
@@ -91,9 +142,7 @@ val prepareAlgebra = tasks.register("prepareAlgebra") {
         }
         dir.resolve("build.gradle.kts").writeText(render("algebra/build.gradle.kts.in", subs))
         dir.resolve("settings.gradle.kts").writeText(render("algebra/settings.gradle.kts.in", subs))
-
-        val libPathValue = copyNativeLib.get().extensions.extraProperties["libPathValue"] as String
-        val libFile = File(libPathValue)
+ 
         if (libFile.isFile) {
             Files.copy(
                 libFile.toPath(),
@@ -101,7 +150,7 @@ val prepareAlgebra = tasks.register("prepareAlgebra") {
                 StandardCopyOption.REPLACE_EXISTING
             )
         }
-
+ 
         val wrapperTpl = templates.dir("wrapper").asFile
         require(wrapperTpl.exists()) { "Missing Gradle wrapper template at templates/wrapper/" }
         listOf("gradlew", "gradlew.bat").forEach { n ->
@@ -121,54 +170,42 @@ val prepareAlgebra = tasks.register("prepareAlgebra") {
                 Files.copy(f.toPath(), File(wrapDstDir, f.name).toPath(), StandardCopyOption.REPLACE_EXISTING)
             }
         }
-
-        println("Algebra prepared at: ${dir.absolutePath}")
     }
-
-}
-
-// jextract outputs directly into algebra/src/main/java
-val runJextract = tasks.register<Exec>("runJextract") {
+ }
+ 
+ val runJextract = tasks.register<Exec>("runJextract") {
     dependsOn(prepareAlgebra)
-    val jextractExe = jextractPathProvider.orNull ?: error("Missing -Pjextract=... (path to jextract.bat)")
-    require(jextractExe.isFile) { "jextract executable not found: $jextractExe" }
-    val hdr = headerFileProvider.orNull ?: error("Missing -Pmevc_h=...")
-    val libName = copyNativeLib.get().extensions.extraProperties["libLogicalName"] as String
-
-    commandLine(
-        jextractExe.absolutePath,
-        "-t", "org.garamon.$libName",
-        "-l", ":${libFileProvider.get().absolutePath}",
-        "--output", algebraSrcMain.get().asFile.absolutePath,
-        hdr.absolutePath
-    )
-    outputs.dir(algebraSrcMain.map { it.dir("org/garamon/$libName") })
-}
-
-// First-stage generator templates into algebra/src/main/java (replace GENERIC)
-val firstStageTemplates = tasks.register<Copy>("firstStageTemplates") {
-    dependsOn(runJextract)
-    val libName = copyNativeLib.get().extensions.extraProperties["libLogicalName"] as String
     doFirst {
-        val genDir = templatesGen.asFile
-        val genFiles = genDir.listFiles()?.sortedBy { it.absolutePath } ?: emptyList()
-        println("templatesGen files (${genFiles.size}):")
-        genFiles.forEach { println(it.absolutePath) }
+        val jextractExe = jextractPathProvider.get()
+        require(jextractExe.isFile) { "jextract executable not found: $jextractExe" }
+        val hdr = headerFileProvider.get()
+        val lib = libFileProvider.get()
+        commandLine(
+            jextractExe.absolutePath,
+            "-t", "org.garamon.${libLogicalNameProvider.get()}",
+            "-l", ":${lib.absolutePath}",
+            "--output", algebraSrcMain.get().asFile.absolutePath,
+            hdr.absolutePath
+        )
     }
+    outputs.dir(algebraSrcMain.zip(libLogicalNameProvider) { dir, name -> dir.dir("org/garamon/$name") })
+ }
+ 
+ val firstStageTemplates = tasks.register<Copy>("firstStageTemplates") {
+    dependsOn(runJextract)
     from(templatesGen)
-    into(algebraSrcMain.map { it.dir("org/garamon/$libName") })
+    val targetDir = algebraSrcMain.zip(libLogicalNameProvider) { dir, name -> dir.dir("org/garamon/$name") }
+    into(targetDir)
     includeEmptyDirs = false
-    filter { line: String -> line.replace("GENERIC", libName) }
-
+    filter { line: String -> line.replace("GENERIC", libLogicalNameProvider.get()) }
     inputs.dir(templatesGen)
-    outputs.dir(algebraSrcMain.map { it.dir("org/garamon/$libName") })
-}
-
-// Compile the minimal parser (sources are now in algebra/src/main/java)
-val compileParser = tasks.register<JavaCompile>("compileParser") {
+    outputs.dir(targetDir)
+ }
+ 
+ val compileParser = tasks.register<JavaCompile>("compileParser") {
     dependsOn(firstStageTemplates)
-    val libName = copyNativeLib.get().extensions.extraProperties["libLogicalName"] as String
-    source = fileTree(algebraSrcMain.map { it.dir("org/garamon/$libName") }) { include("**/*.java") }
+    val srcDirProv = algebraSrcMain.zip(libLogicalNameProvider) { dir, name -> dir.dir("org/garamon/$name") }
+    source = fileTree(srcDirProv) { include("**/*.java") }
     doFirst {
         val files = source.files.sortedBy { it.absolutePath }
         println("Source files (${files.size}):")
@@ -179,17 +216,14 @@ val compileParser = tasks.register<JavaCompile>("compileParser") {
     options.encoding = "UTF-8"
     sourceCompatibility = "25"
     targetCompatibility = "25"
-}
-
-// Utility to run the minimal garamon parser
-fun garamonParser(
+ }
+ 
+ fun garamonParser(
     task: JavaExec,
-    libName: String,
     outputDir: File,
     templateFiles: List<File>
-) {
+ ) {
     task.apply {
-        mainClass.set("org.garamon.$libName.GaramonParser")
         classpath(classesDir)
         jvmArgs(
             "--enable-native-access=ALL-UNNAMED",
@@ -200,63 +234,48 @@ fun garamonParser(
             *templateFiles.map { it.absolutePath }.toTypedArray()
         )
     }
-}
-
-// Generate main sources with garamonParser into algebra/src/main/java
-val runMiniParserMain = tasks.register<JavaExec>("runMiniParserMain") {
+ }
+ 
+ val runMiniParserMain = tasks.register<JavaExec>("runMiniParserMain") {
     dependsOn(compileParser)
-    val libName = copyNativeLib.get().extensions.extraProperties["libLogicalName"] as String
-
+    mainClass.set(libLogicalNameProvider.map { "org.garamon.$it.GaramonParser" })
+    val self = this
     doFirst {
         println("templatesMain files (${templatesMain.files.size}):")
         templatesMain.files.sortedBy { it.absolutePath }.forEach { println(it.absolutePath) }
+        garamonParser(
+            self,
+            algebraSrcMain.get().dir("org/garamon/${libLogicalNameProvider.get()}").asFile,
+            templatesMain.files.toList()
+        )
     }
-
-    garamonParser(
-        this,
-        libName,
-        algebraSrcMain.get().dir("org/garamon/$libName").asFile,
-        templatesMain.files.toList()
-    )
-    outputs.dir(algebraSrcMain.map { it.dir("org/garamon/$libName") })
-}
-
-// Generate test sources with garamonParser into algebra/src/test/java
-val runMiniParserTests = tasks.register<JavaExec>("runMiniParserTests") {
+    outputs.dir(algebraSrcMain.zip(libLogicalNameProvider) { dir, name -> dir.dir("org/garamon/$name") })
+ }
+ 
+ val runMiniParserTests = tasks.register<JavaExec>("runMiniParserTests") {
     dependsOn(compileParser)
-    val libName = copyNativeLib.get().extensions.extraProperties["libLogicalName"] as String
-
+    mainClass.set(libLogicalNameProvider.map { "org.garamon.$it.GaramonParser" })
+    val self = this
     doFirst {
         println("templatesTests files (${templatesTests.files.size}):")
         templatesTests.files.sortedBy { it.absolutePath }.forEach { println(it.absolutePath) }
+        garamonParser(
+            self,
+            algebraSrcTest.get().dir("org/garamon/${libLogicalNameProvider.get()}").asFile,
+            templatesTests.files.toList()
+        )
     }
-
-    garamonParser(
-        this,
-        libName,
-        algebraSrcTest.get().dir("org/garamon/$libName").asFile,
-        templatesTests.files.toList()
-    )
-    outputs.dir(algebraSrcTest.map { it.dir("org/garamon/$libName") })
-}
-
-// Build the algebra with its own wrapper
-val makeAlgebra = tasks.register("makeAlgebra") {
+    outputs.dir(algebraSrcTest.zip(libLogicalNameProvider) { dir, name -> dir.dir("org/garamon/$name") })
+ }
+ 
+ val makeAlgebra = tasks.register("makeAlgebra") {
     group = "algebra"
     description = "Generate the algebra under build/algebra and build it with its wrapper"
-
     dependsOn(runMiniParserMain, runMiniParserTests)
-
     doLast {
         val dir = algebraDir.get().asFile
         println("Algebra emitted at: ${dir.absolutePath}")
-
-        println("To build java package: (cd build/algebra ; ./gradlew build)")
     }
-}
-
-// Keep root artifacts if needed (sources/javadoc for the tiny parser)
-tasks.named("assemble") {
-    dependsOn(makeAlgebra)
-}
+ }
+ 
 

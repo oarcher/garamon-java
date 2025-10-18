@@ -35,7 +35,6 @@ public final class GaramonParser {
         }
 
         Path outDir = Path.of(args[1]);
-        NativeLoader.load();
 
         // Templates reused for all files
         String tmplOne = """

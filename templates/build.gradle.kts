@@ -5,7 +5,7 @@ plugins {
     `maven-publish`
 }
 
-group = "org.garamon.${NAME}"
+group = "org.garamon.GENERIC"
 version = "0.9"
 
 
@@ -40,9 +40,9 @@ tasks.withType<Jar>().configureEach {
 tasks.jar {
     manifest {
         attributes(
-            "Implementation-Title" to "garamon-${NAME}",
+            "Implementation-Title" to "garamon-GENERIC",
             "Implementation-Version" to (project.findProperty("version") ?: "0.1.0"),
-            "Automatic-Module-Name" to "org.garamon.${NAME}"
+            "Automatic-Module-Name" to "org.garamon.GENERIC"
         )
     }
 }

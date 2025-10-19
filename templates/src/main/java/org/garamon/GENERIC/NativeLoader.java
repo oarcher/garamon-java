@@ -1,4 +1,4 @@
-package org.garamon.GENERIC;
+package org.garamon.project_namespace;
 
 import java.io.InputStream;
 import java.nio.file.Files;

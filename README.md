@@ -30,26 +30,25 @@ You can download `jextract` from [https://jdk.java.net/jextract/](https://jdk.ja
 To generate the Java bindings, use the `create_package.sh` script:
 
 ```bash
-./create_package.sh --lib=<path_to_native_library> --mvec_h=<path_to_mvec_header> --jextract=<path_to_jextract_tool> [--publish]
+./create_package.sh --lib=<path_to_native_library> --mvec_h=<path_to_mvec_header> [--jextract=<path_to_jextract_tool>] [--out=<output_directory>] [--publish]
 ```
 
 ### Arguments:
 
 *   `--lib=<path>`: Path to the native library (e.g., `../garamon/build/output/garamon_c5ga/libc5ga.so`, `../garamon/build/output/garamon_c5ga/c5ga.dll`).
 *   `--mvec_h=<path>`: Path to the C header file (e.g., `../garamon/build/output/garamon_c5ga/src/c5ga/Mvec.h`) for `jextract`.
-*   `--jextract=<path>`: Path to the `jextract` tool executable.
-*   `--publish`: Optional. If present, publishes the generated package to Maven local.
+*   `--jextract=<path>`: Path to the `jextract` tool executable (optional). If not provided, `jextract` must be in your system's PATH.
+*   `--out=<path>`: Output directory for the generated algebra project (optional). Default is `build` in current directory.
 
 ## Example
 
-Assuming you have built Garamon in `/home/oarcher/Develop/garamon` and `jextract` is installed at `/usr/share/jextract-22/bin/jextract`:
+Assuming you have built Garamon in `/home/oarcher/Develop/garamon` and `jextract` is installed at `/usr/share/jextract-22/bin/jextract`. The output will be placed in `my_algebra_project`:
 
 ```bash
 ./create_package.sh 
-    --lib=/home/oarcher/Develop/garamon/build/output/garamon_c5ga/libc5ga.so
-    --mvec_h=/home/oarcher/Develop/garamon/build/output/garamon_c5ga/src/c5ga/Mvec.h
-    --jextract=/usr/share/jextract-22/bin/jextract 
+    --lib=../garamon/build/output/garamon_c5ga/libc5ga.so
+    --mvec_h=../garamon/build/output/garamon_c5ga/src/c5ga/Mvec.h
+    --jextract=/usr/share/jextract-22/bin/jextract \
+    --out=my_algebra_project \
     --publish
 ```
-
-

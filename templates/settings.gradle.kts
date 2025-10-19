@@ -1,0 +1,2 @@
+rootProject.name = "garamon-GENERIC"
+

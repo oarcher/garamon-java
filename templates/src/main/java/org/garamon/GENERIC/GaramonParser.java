@@ -29,12 +29,23 @@ public final class GaramonParser {
     }
 
     public static void main(String[] args) throws Exception {
-        if (args.length < 3 || !args[0].equals("-d")) {
-            System.err.println("Usage: Main -d <outputDirectory> <file1.java> ... <filen.java>");
-            System.exit(1);
+        boolean inplace = false;
+        java.util.List<Path> files = new java.util.ArrayList<>();
+
+        for (String arg : args) {
+            if (arg.equals("--inplace")) {
+                inplace = true;
+            } else if (arg.startsWith("-")) {
+                System.err.println("Unknown argument: " + arg);
+                printUsageAndExit();
+            } else {
+                files.add(Path.of(arg));
+            }
         }
 
-        Path outDir = Path.of(args[1]);
+        if (files.isEmpty()) {
+            printUsageAndExit();
+        }
 
         // Templates reused for all files
         String tmplOne = """
@@ -47,18 +58,35 @@ public final class GaramonParser {
                 """;
         String tmplCons = "    int Eproject_name_blade = project_xor_index_blade;\n";
 
-        for (int i = 2; i < args.length; i++) {
-            processFile(Path.of(args[i]), outDir, tmplOne, tmplCons);
+        for (Path inFile : files) {
+            try {
+                System.err.println("Parsing " + inFile);
+                processFile(inFile, inplace, tmplOne, tmplCons);
+            } catch (Exception e) {
+                System.err.println("Error processing file " + inFile + ": " + e.getMessage());
+            }
         }
     }
 
-    private static void processFile(Path input, Path outDir, String tmplOne, String tmplCons) throws Exception {
-        String data = Files.readString(input);
+    private static void processFile(Path inFile, boolean inplace, String tmplOne, String tmplCons) throws Exception {
+        String data = Files.readString(inFile);
         String result = GaramonParser.process(data, tmplOne, tmplCons);
-        String base = input.getFileName().toString();
-        Path outFile = outDir.resolve(base);
-        Files.writeString(outFile, result);
-        System.out.println("Saved parser output to: " + outFile);
+        if (inplace) {
+            Files.writeString(inFile, result);
+        } else {
+            System.out.println(result);
+        }
+    }
 
+    private static void printUsageAndExit() {
+        String usage = """
+                Garamon java parser for algebra GENERIC
+
+                Usage: [--inplace] file1 .. filen
+                  --inplace: Modify files in place. If not set, prints to stdout.
+                  file1 .. filen: One or more files to process.
+                """;
+        System.err.println(usage);
+        System.exit(1);
     }
 }

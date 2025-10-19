@@ -38,11 +38,11 @@ To generate the Java bindings, use the `create_package.sh` script:
 *   `--lib=<path>`: Path to the native library (e.g., `../garamon/build/output/garamon_c5ga/libc5ga.so`, `../garamon/build/output/garamon_c5ga/c5ga.dll`).
 *   `--mvec_h=<path>`: Path to the C header file (e.g., `../garamon/build/output/garamon_c5ga/src/c5ga/Mvec.h`) for `jextract`.
 *   `--jextract=<path>`: Path to the `jextract` tool executable (optional). If not provided, `jextract` must be in your system's PATH.
-*   `--out=<path>`: Output directory for the generated algebra project (optional). Default is `build` in current directory.
+*   `--out=<path>`: Directory where the skeleton project will be copied (optional). The main algebra project is always generated in `build-algebra`.
 
 ## Example
 
-Assuming you have built Garamon in `/home/oarcher/Develop/garamon` and `jextract` is installed at `/usr/share/jextract-22/bin/jextract`. The output will be placed in `my_algebra_project`:
+Assuming you have built Garamon in `../garamon` and `jextract` is installed at `/usr/share/jextract-22/bin/jextract`. The main algebra project will be generated in `build-algebra`, and the examples project will be copied to `my_algebra_project`:
 
 ```bash
 ./create_package.sh 

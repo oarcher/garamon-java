@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+
+# Find the script's directory
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+JAR_PATH="$SCRIPT_DIR/build/libs/garamon-java.jar"
+
+# Build the project if the JAR doesn't exist
+if [ ! -f "$JAR_PATH" ]; then
+    echo "Building create-package tool..."
+    (cd "$SCRIPT_DIR" && ./gradlew build)
+fi
+
+# Run the Java application
+java --enable-native-access=ALL-UNNAMED -jar "$JAR_PATH" "$@"

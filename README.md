@@ -44,6 +44,7 @@ To generate the Java bindings, use the `create_package.sh` script:
 
 Assuming you have built Garamon in `../garamon` and `jextract` is installed at `/usr/share/jextract-22/bin/jextract`. The main algebra project will be generated in `build-algebra`, and the examples project will be copied to `my_algebra_project`:
 
+### Linux
 ```bash
 ./create_package.sh 
     --lib=../garamon/build/output/garamon_c5ga/libc5ga.so
@@ -51,4 +52,13 @@ Assuming you have built Garamon in `../garamon` and `jextract` is installed at `
     --jextract=/usr/share/jextract-22/bin/jextract \
     --out=my_algebra_project \
     --publish
+```
+
+### Windows (PowerShell):
+```powershell
+.\create_package.bat `
+    --lib=..\garamon\build\output\garamon_c5ga\build\Release\c5ga.dll `
+    --mvec_h=..\garamon\build\output\garamon_c5ga\src\c5ga\Mvec.h `
+    --jextract=..\..\Tools\jextract-22\bin\jextract.bat `
+    --out=../garamon-java-c5ga
 ```

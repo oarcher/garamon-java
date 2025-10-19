@@ -15,7 +15,7 @@ public class Main {
 
     // mv2[E0]=1 ; mv2[E1]=2 ;
     // mv2 += I() + 2*e1()
-    Mvec mv2 = Mvec(0.0);
+    Mvec mv2 = new Mvec(0.0);
     mv2.at(Mvec.Basis.E0, 1.0);
     mv2.at(Mvec.Basis.E1, 2.0);
     mv2 = mv2.add(Mvec.I().add(Mvec.e01().rmul(2.0)));

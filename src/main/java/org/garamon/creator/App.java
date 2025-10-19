@@ -11,7 +11,6 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
-import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -58,10 +57,7 @@ public class App {
         String noPrefix = libFileName.startsWith("lib") ? libFileName.substring(3) : libFileName;
         String libLogicalName = noPrefix.substring(0, noPrefix.indexOf('.'));
         Path algebraDir = Path.of("build-algebra");
-        if (Files.exists(algebraDir)) {
-            System.err.println("Error: Directory '" + algebraDir + "' already exists. Please remove it first.");
-            System.exit(1);
-        }
+        
         Path algebraSrc = algebraDir.resolve("src");
         Path resourcesDir = algebraSrc.resolve("main/resources");
         Path nativeDir = resourcesDir.resolve("natives");

@@ -1,4 +1,5 @@
 import org.gradle.api.tasks.bundling.Jar
+import org.gradle.jvm.toolchain.JavaLanguageVersion
 
 plugins {
     application
@@ -17,6 +18,12 @@ application {
     mainClass.set("org.garamon.creator.App")
 }
 
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(25))
+    }
+}
+
 tasks.named<Jar>("jar") {
     manifest {
         attributes["Main-Class"] = application.mainClass.get()
@@ -27,3 +34,4 @@ tasks.named<Jar>("jar") {
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     }
 }
+

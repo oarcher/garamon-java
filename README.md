@@ -62,3 +62,7 @@ Assuming you have built Garamon in `../garamon` and `jextract` is installed at `
     --jextract=..\..\Tools\jextract-22\bin\jextract.bat `
     --out=../garamon-java-c5ga
 ```
+
+## IDE Setup
+
+The generated project is a standard Gradle project and can be easily opened in popular Java IDEs like IntelliJ IDEA and VSCode. This project serves as a development skeleton, with `src/main/java/Main.java` providing an executable example.

@@ -1,22 +1,21 @@
 import org.gradle.external.javadoc.StandardJavadocDocletOptions
+import org.gradle.jvm.toolchain.JavaLanguageVersion
 
 plugins {
     `java-library`
     `maven-publish`
 }
 
-group = "org.garamon.GENERIC"
+group = "org.garamon"
 version = "0.9"
-
 
 repositories {
     mavenCentral()
+    mavenLocal()
 }
 
 java {
     toolchain { languageVersion.set(JavaLanguageVersion.of(25)) }
-    sourceCompatibility = JavaVersion.VERSION_25
-    targetCompatibility = JavaVersion.VERSION_25
     withSourcesJar()
     withJavadocJar()
 }
@@ -24,21 +23,20 @@ java {
 publishing {
     publications {
         create<MavenPublication>("mavenJava") {
-            from(components["java"])   
+            from(components["java"])  
         }
     }
 }
 
 dependencies {
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.3")
+    testImplementation(platform("org.junit:junit-bom:5.11.3"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
-
 
 tasks.withType<Javadoc>().configureEach {
     isFailOnError = false
-    val opts = options as StandardJavadocDocletOptions
-    opts.addBooleanOption("Xdoclint:none", true)
+    (options as StandardJavadocDocletOptions).addBooleanOption("Xdoclint:none", true)
 }
 
 tasks.withType<Jar>().configureEach {
@@ -49,7 +47,7 @@ tasks.jar {
     manifest {
         attributes(
             "Implementation-Title" to "garamon-GENERIC",
-            "Implementation-Version" to (project.findProperty("version") ?: "0.1.0"),
+            "Implementation-Version" to (project.findProperty("version") ?: "0.9"),
             "Automatic-Module-Name" to "org.garamon.GENERIC"
         )
     }
@@ -57,7 +55,6 @@ tasks.jar {
 
 tasks.test {
     useJUnitPlatform()
-    // Ensure native library resolution for tests
     jvmArgs("--enable-native-access=ALL-UNNAMED")
     systemProperty("java.library.path", file("libs").absolutePath)
     testLogging {

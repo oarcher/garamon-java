@@ -145,16 +145,13 @@ public class App {
         command.addAll(javaFiles);
         execute(command);
 
-        // Build, test, and publish
+        // Copy examples
         if (outDir != null) {
-            System.out.println("Copying examples to " + outDir.toAbsolutePath());
-            try {
-                copyDirectory(algebraDir.resolve("examples"), outDir);
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+            System.out.println("Copying skeleton to " + outDir);
+            copyDirectory(algebraDir.resolve("examples"), outDir);
         }
 
+        // Build, test and publish 
         buildTestPublish(algebraDir);
 
         // Cleanup
@@ -177,7 +174,12 @@ public class App {
         } else {
             finalExamplesDir = algebraDir;
         }
-        System.out.println("Projetc skeleton available at: " + finalExamplesDir.toAbsolutePath().normalize());
+        System.out.println("Project skeleton available at: " + finalExamplesDir.toAbsolutePath().normalize());
+        System.out.println("You can now import it in your IDE (as a Gradle project) or run it via command line:");
+        System.out.println("  cd " + finalExamplesDir.toAbsolutePath().normalize());
+        System.out.println("  ./gradlew run");
+
+
         System.out.println("--------------------------------------------------");
     }
 
@@ -209,6 +211,8 @@ public class App {
         runGradleTasks(algebraDir, "test");
         System.out.println("Publishing to MavenLocal");
         runGradleTasks(algebraDir, "publishToMavenLocal");
+        System.out.println("Cleaning up");
+        runGradleTasks(algebraDir, "clean");
     }
 
     private void runProcess(ProcessBuilder pb) throws IOException, InterruptedException {

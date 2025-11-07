@@ -124,7 +124,10 @@ public class App {
         execute("javac",
                 "-d", tmpClassesDir.toString(),
                 algebraPkgDir.resolve("GaramonParser.java").toString(),
-                algebraPkgDir.resolve("Mvec_h.java").toString());
+                algebraPkgDir.resolve("Mvec_h.java").toString(),
+                algebraPkgDir.resolve("Mvec_h$shared.java").toString()
+                );
+
 
         // Run parser for java sources
         System.out.println("Running parser for java sources");

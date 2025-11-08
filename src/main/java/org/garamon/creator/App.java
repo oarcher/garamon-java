@@ -142,6 +142,7 @@ public class App {
         command.add("--enable-native-access=ALL-UNNAMED");
         command.add("-cp");
         command.add(tmpClassesDir.toString());
+        command.add("-Djdk.lang.foreign.debug=true");
         command.add("-Djava.library.path=" + targetNativeDir.toAbsolutePath());
         command.add(algebraPkgName + ".GaramonParser");
         command.add("--inplace");

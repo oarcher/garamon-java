@@ -6,7 +6,7 @@ plugins {
     `maven-publish`
 }
 
-group = "org.garamon"
+group = "org.garamon.GENERIC"
 version = "0.9"
 
 repositories {

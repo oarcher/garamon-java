@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "org.garamon.GENERIC"
-version = "0.9"
+version = "1.0"
 
 repositories {
     mavenCentral()
@@ -47,7 +47,7 @@ tasks.jar {
     manifest {
         attributes(
             "Implementation-Title" to "garamon-GENERIC",
-            "Implementation-Version" to (project.findProperty("version") ?: "0.9"),
+            "Implementation-Version" to project.version.toString(),
             "Automatic-Module-Name" to "org.garamon.GENERIC"
         )
     }

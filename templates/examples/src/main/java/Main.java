@@ -3,25 +3,15 @@ import java.util.Arrays;
 
 public class Main {
   public static void main(String[] args) {
-    // mv1[scalar]=1 ; mv1[E0]=42
+    // mv1[scalar]=1, mv1[I]=42
     Mvec mv1 = new Mvec(1.0);
-    mv1.at(Mvec.Basis.SCALAR, 1.0);
-
-    mv1.at(Mvec.Basis.E0, 42.0);
-    // Mvec mv1 =
-    // Mvec.scalar(1.0).add(Mvec.e0().rmul(42.0));
+    mv1 = mv1.add(Mvec.I().rmul(42.0));
     System.out.print("mv1 : ");
     mv1.display();
 
-    // mv2[E0]=1 ; mv2[E1]=2 ;
-    // mv2 += I() + 2*e1()
-    Mvec mv2 = new Mvec(0.0);
-    mv2.at(Mvec.Basis.E0, 1.0);
-    mv2.at(Mvec.Basis.E1, 2.0);
-    mv2 = mv2.add(Mvec.I().add(Mvec.e01().rmul(2.0)));
-    // Mvec mv2 = Mvec.e0().rmul(1.0)
-    // .add(Mvec.e1().rmul(2.0))
-    // .add(Mvec.I().add(Mvec.e01().rmul(2.0)));
+    // mv2 = scalar(1) + I()
+    Mvec mv2 = new Mvec(1.0);
+    mv2 = mv2.add(Mvec.I());
     System.out.print("mv2 : ");
     mv2.display();
     System.out.println();

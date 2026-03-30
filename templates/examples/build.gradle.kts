@@ -16,7 +16,7 @@ repositories {
 }
 
 dependencies {
-    implementation("org.garamon.GENERIC:garamon-GENERIC:0.9")
+    implementation("org.garamon.GENERIC:garamon-GENERIC:1.0")  // must match template/build.gradle.kts
 }
 
 application {

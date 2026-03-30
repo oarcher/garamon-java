@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "org.garamon.GENERIC"
-version = "1.0"
+version = "1.0"  // change also template/example/build.gradle.kts
 
 repositories {
     mavenCentral()

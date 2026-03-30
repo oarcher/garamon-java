@@ -20,6 +20,15 @@ java {
     withJavadocJar()
 }
 
+sourceSets {
+    main {
+        java { include("org/garamon/GENERIC/**") }
+    }
+    test {
+        java { include("org/garamon/GENERIC/**") }
+    }
+}
+
 publishing {
     publications {
         create<MavenPublication>("mavenJava") {

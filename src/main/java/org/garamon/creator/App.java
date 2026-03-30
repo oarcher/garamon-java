@@ -129,11 +129,13 @@ public class App {
                 );
 
 
-        // Run parser for java sources
+        // Run parser for java sources - only process the current algebra's files
         System.out.println("Running parser for java sources");
+        String algebraPkgPath = "/org/garamon/" + libLogicalName + "/";
         List<String> javaFiles = Files.walk(algebraDir)
                 .filter(p -> p.toString().endsWith(".java"))
                 .filter(p -> !p.getFileName().toString().equals("Mvec_h.java"))
+                .filter(p -> !p.toString().contains("/org/garamon/") || p.toString().contains(algebraPkgPath))
                 .map(Path::toString)
                 .collect(Collectors.toList());
 
